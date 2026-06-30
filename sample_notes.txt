@@ -1,0 +1,12 @@
+Photosynthesis is the process by which plants, algae, and some bacteria convert light energy into chemical energy stored in glucose. It occurs mainly in the chloroplasts of plant cells, specifically using a green pigment called chlorophyll that absorbs light, primarily in the blue and red wavelengths.
+
+The process has two main stages: the light-dependent reactions and the light-independent reactions (Calvin cycle).
+
+In the light-dependent reactions, which take place in the thylakoid membranes, light energy is absorbed and used to split water molecules (photolysis), releasing oxygen as a byproduct. This stage produces ATP and NADPH, which are energy-carrying molecules.
+
+In the Calvin cycle, which takes place in the stroma, the ATP and NADPH produced earlier are used to convert carbon dioxide into glucose through a series of enzyme-driven reactions. The key enzyme involved is RuBisCO.
+
+The overall chemical equation for photosynthesis is:
+6CO2 + 6H2O + light energy -> C6H12O6 + 6O2
+
+Factors that affect the rate of photosynthesis include light intensity, carbon dioxide concentration, and temperature. As any of these increase (within a normal range), the rate of photosynthesis generally increases, until a limiting factor caps it.

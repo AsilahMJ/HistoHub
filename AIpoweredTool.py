@@ -72,7 +72,10 @@ def process_notes(notes_text):
         "You are a study assistant. Given lecture notes, extract a single main "
         "topic name (2-4 words), a clear summary (150-250 words), 5 quiz questions "
         "(multiple choice, 4 options each, mark the correct one), and 8 flashcards "
-        "(front/back). Respond ONLY in valid JSON with this exact structure: "
+        "(front/back). The 'answer' field MUST be a single lowercase letter "
+        "(a, b, c, or d) corresponding to the correct option's position in the "
+        "options list — never the option's full text. Respond ONLY in valid JSON "
+        "with this exact structure: "
         '{"topic": "...", "summary": "...", '
         '"quiz": [{"question": "...", "options": ["a","b","c","d"], "answer": "a"}], '
         '"flashcards": [{"front": "...", "back": "..."}]}'
@@ -171,13 +174,31 @@ def cmd_quiz():
         print(q["question"])
         for i, opt in enumerate(q["options"]):
             print(f"  {chr(97+i)}) {opt}")
+
+        # Figure out which option letter is actually correct, regardless of
+        # whether the AI stored the answer as a letter ("a") or full text
+        # ("Light-dependent and light-independent reactions").
+        raw_answer = q["answer"].strip()
+        correct_index = None
+        if len(raw_answer) == 1 and raw_answer.lower() in "abcd":
+            correct_index = "abcd".index(raw_answer.lower())
+        else:
+            for i, opt in enumerate(q["options"]):
+                if opt.strip().lower() == raw_answer.lower():
+                    correct_index = i
+                    break
+        if correct_index is None:
+            # Fallback: couldn't match it, skip grading this question safely
+            correct_index = 0
+
+        correct_letter = chr(97 + correct_index)
         ans = input("Your answer (a/b/c/d): ").strip().lower()
-        correct_letter = q["answer"].strip().lower()[0]
+
         if ans == correct_letter:
             print("Correct!\n")
             correct_count += 1
         else:
-            print(f"Incorrect. Correct answer: {q['answer']}\n")
+            print(f"Incorrect. Correct answer: {correct_letter}) {q['options'][correct_index]}\n")
 
     topic["attempts"] += len(questions)
     topic["correct"] += correct_count

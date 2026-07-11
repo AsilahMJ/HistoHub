@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Study Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0D0F12;
+  --surface:  #13161B;
+  --raised:   #1C2027;
+  --border:   #2A2F38;
+  --border2:  #3A4050;
+  --accent:   #6EE7B7;
+  --adim:     #1A3D30;
+  --adim2:    #0F2820;
+  --text:     #E8EAF0;
+  --muted:    #8A909E;
+  --danger:   #F87171;
+  --warn:     #FBBF24;
+  --font-d:   'Space Grotesk', sans-serif;
+  --font-b:   'Inter', sans-serif;
+  --font-m:   'JetBrains Mono', monospace;
+  --r:        10px;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-b); font-size: 14px; overflow: hidden; }
+
+/* ── LAYOUT ── */
+.shell { display: grid; grid-template-rows: 52px 1fr; height: 100vh; }
+
+/* Header */
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.logo { font-family: var(--font-d); font-size: 16px; font-weight: 600; color: var(--accent); letter-spacing: -0.3px; margin-right: auto; }
+.logo span { color: var(--muted); font-weight: 400; }
+
+/* Main area */
+.main { display: grid; grid-template-columns: 260px 1fr; overflow: hidden; }
+
+/* Sidebar */
+.sidebar {
+  background: var(--surface); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
+.sidebar-header h2 { font-family: var(--font-d); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.topics-list { flex: 1; overflow-y: auto; padding: 8px; }
+.topic-card {
+  padding: 10px 12px; border-radius: var(--r); margin-bottom: 4px;
+  cursor: pointer; transition: background 0.12s; border: 1px solid transparent;
+}
+.topic-card:hover { background: var(--raised); }
+.topic-card.active { background: var(--adim2); border-color: var(--adim); }
+.topic-name { font-size: 13px; font-weight: 500; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topic-bar-wrap { display: flex; align-items: center; gap: 8px; }
+.topic-bar { flex: 1; height: 3px; background: var(--border); border-radius: 2px; }
+.topic-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.4s; }
+.topic-pct { font-family: var(--font-m); font-size: 11px; color: var(--muted); min-width: 32px; text-align: right; }
+.topic-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.empty-topics { padding: 24px 12px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+.sidebar-footer { padding: 12px; border-top: 1px solid var(--border); }
+
+/* Chat panel */
+.chat-panel { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+.messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+/* Message bubbles */
+.msg { display: flex; flex-direction: column; gap: 4px; max-width: 780px; }
+.msg.user { align-self: flex-end; align-items: flex-end; }
+.msg.agent { align-self: flex-start; align-items: flex-start; }
+.msg-label { font-size: 11px; color: var(--muted); font-family: var(--font-m); }
+.msg-bubble {
+  padding: 12px 16px; border-radius: var(--r); line-height: 1.65; font-size: 14px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.msg.user .msg-bubble { background: var(--adim); color: var(--accent); border: 1px solid var(--adim); max-width: 480px; }
+.msg.agent .msg-bubble { background: var(--surface); border: 1px solid var(--border); max-width: 640px; }
+
+/* Tool call indicator */
+.tool-call {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 6px;
+  background: var(--adim2); border: 1px solid var(--adim);
+  font-family: var(--font-m); font-size: 11px; color: var(--accent);
+}
+.tool-call::before { content: '⟳'; font-size: 13px; }
+.tool-call.done::before { content: '✓'; }
+
+/* Quiz inline */
+.quiz-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 18px; max-width: 560px; width: 100%;
+}
+.quiz-q { font-weight: 500; margin-bottom: 14px; line-height: 1.5; }
+.quiz-options { display: flex; flex-direction: column; gap: 8px; }
+.quiz-opt {
+  padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
+  cursor: pointer; transition: all 0.12s; font-size: 14px; text-align: left;
+  background: var(--raised); color: var(--text);
+  display: flex; align-items: center; gap: 10px;
+}
+.quiz-opt:hover:not(:disabled) { border-color: var(--accent); background: var(--adim2); }
+.quiz-opt.correct { background: #0F2820; border-color: var(--accent); color: var(--accent); }
+.quiz-opt.wrong { background: #2A1010; border-color: var(--danger); color: var(--danger); }
+.quiz-opt:disabled { cursor: default; }
+.quiz-letter { font-family: var(--font-m); font-size: 12px; color: var(--muted); min-width: 16px; }
+.quiz-progress { font-family: var(--font-m); font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+
+/* Flashcard inline */
+.flashcard {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 24px; max-width: 420px;
+  text-align: center; cursor: pointer; transition: border-color 0.15s;
+}
+.flashcard:hover { border-color: var(--border2); }
+.flashcard-label { font-size: 11px; color: var(--muted); font-family: var(--font-m); margin-bottom: 12px; }
+.flashcard-content { font-size: 16px; font-weight: 500; line-height: 1.5; min-height: 52px; display: flex; align-items: center; justify-content: center; }
+.flashcard-hint { font-size: 11px; color: var(--muted); margin-top: 12px; }
+.flashcard-nav { display: flex; gap: 8px; margin-top: 12px; justify-content: center; }
+
+/* Score card */
+.score-card {
+  background: var(--adim2); border: 1px solid var(--adim);
+  border-radius: var(--r); padding: 16px 20px; max-width: 300px;
+}
+.score-number { font-family: var(--font-d); font-size: 32px; font-weight: 600; color: var(--accent); }
+.score-label { font-size: 13px; color: var(--muted); }
+
+/* Thinking indicator */
+.thinking { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.dots { display: flex; gap: 4px; }
+.dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: pulse 1.2s ease-in-out infinite; }
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes pulse { 0%,80%,100%{opacity:0.3} 40%{opacity:1} }
+
+/* Input area */
+.input-area {
+  padding: 16px 20px; border-top: 1px solid var(--border);
+  display: flex; gap: 10px; align-items: flex-end; background: var(--surface);
+}
+.chat-input {
+  flex: 1; background: var(--raised); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--font-b); font-size: 14px;
+  padding: 10px 14px; border-radius: var(--r); resize: none; outline: none;
+  line-height: 1.5; max-height: 120px; min-height: 42px; transition: border-color 0.15s;
+}
+.chat-input:focus { border-color: var(--border2); }
+.chat-input::placeholder { color: var(--muted); }
+
+/* Buttons */
+.btn {
+  font-family: var(--font-b); font-size: 13px; font-weight: 500;
+  padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
+  transition: all 0.12s; white-space: nowrap;
+}
+.btn-accent { background: var(--accent); color: #0D1A14; }
+.btn-accent:hover { background: #86EFCC; }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn-ghost:hover { color: var(--text); border-color: var(--border2); }
+.btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 6px; }
+.btn-send { padding: 10px 16px; background: var(--accent); color: #0D1A14; border-radius: var(--r); border: none; cursor: pointer; font-size: 18px; transition: background 0.12s; flex-shrink: 0; }
+.btn-send:hover { background: #86EFCC; }
+.btn-send:disabled { opacity: 0.4; cursor: default; }
+
+/* Modal (API key, upload) */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.modal {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 14px; padding: 28px; width: 480px; max-width: 95vw;
+}
+.modal h2 { font-family: var(--font-d); font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+.modal p { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 18px; }
+.modal input[type=text], .modal input[type=password] {
+  width: 100%; background: var(--raised); border: 1px solid var(--border2);
+  color: var(--text); font-family: var(--font-m); font-size: 13px;
+  padding: 10px 14px; border-radius: 8px; outline: none; margin-bottom: 14px;
+  transition: border-color 0.15s;
+}
+.modal input:focus { border-color: var(--accent); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+
+/* Upload drop zone */
+.drop-zone {
+  border: 2px dashed var(--border2); border-radius: var(--r);
+  padding: 32px; text-align: center; cursor: pointer; transition: all 0.15s; margin-bottom: 14px;
+}
+.drop-zone:hover, .drop-zone.drag { border-color: var(--accent); background: var(--adim2); }
+.drop-zone-icon { font-size: 28px; margin-bottom: 8px; }
+.drop-zone-text { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.drop-zone-sub { font-size: 12px; color: var(--muted); }
+.file-types { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+.file-type-tag { padding: 2px 8px; background: var(--raised); border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-m); font-size: 11px; color: var(--muted); }
+.upload-status { font-size: 13px; color: var(--accent); font-family: var(--font-m); min-height: 20px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .main { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+}
+
+/* Utility */
+.hidden { display: none !important; }
+.mt8 { margin-top: 8px; }
+.flex-row { display: flex; gap: 8px; align-items: center; }
+.api-status { font-family: var(--font-m); font-size: 11px; padding: 4px 10px; border-radius: 20px; }
+.api-status.ok { background: var(--adim); color: var(--accent); }
+.api-status.missing { background: #2A1010; color: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- Header -->
+  <header>
+    <div class="logo">Study<span>Agent</span></div>
+    <div id="api-status" class="api-status missing">No API key</div>
+    <button class="btn btn-ghost btn-sm" onclick="openKeyModal()">⚙ API Key</button>
+    <button class="btn btn-accent btn-sm" onclick="openUploadModal()">+ Upload Notes</button>
+  </header>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>Your Topics</h2>
+      </div>
+      <div class="topics-list" id="topics-list">
+        <div class="empty-topics">Upload some notes to get started. Supports PDF, Word, PowerPoint, and text files.</div>
+      </div>
+      <div class="sidebar-footer">
+        <button class="btn btn-ghost btn-sm" style="width:100%" onclick="openUploadModal()">+ Upload Notes</button>
+      </div>
+    </aside>
+
+    <!-- Chat -->
+    <div class="chat-panel">
+      <div class="messages" id="messages">
+        <div class="msg agent">
+          <span class="msg-label">Study Agent</span>
+          <div class="msg-bubble">Hi! I'm your study agent. Upload some lecture notes to get started, then I'll build you a personalised study plan, quiz you, and track your progress over time.
+
+Add your Groq API key using the ⚙ button in the top right — it's free at console.groq.com.</div>
+        </div>
+      </div>
+      <div class="input-area">
+        <textarea class="chat-input" id="chat-input" placeholder="Ask me anything, or just say 'quiz me'…" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="btn-send" id="send-btn" onclick="sendMessage()" title="Send">↑</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- API Key Modal -->
+<div class="modal-overlay hidden" id="key-modal">
+  <div class="modal">
+    <h2>Groq API Key</h2>
+    <p>Your key is stored only in your browser (localStorage) and sent directly to Groq — never to any other server. Get a free key at <strong>console.groq.com</strong>.</p>
+    <input type="password" id="key-input" placeholder="gsk_…" autocomplete="off">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeKeyModal()">Cancel</button>
+      <button class="btn btn-accent" onclick="saveKey()">Save Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal-overlay hidden" id="upload-modal">
+  <div class="modal">
+    <h2>Upload Notes</h2>
+    <p>Upload any document and the agent will extract the text, summarise it, generate quiz questions and flashcards, and add it to your study plan.</p>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
+      <div class="drop-zone-icon">📄</div>
+      <div class="drop-zone-text">Drop a file or click to browse</div>
+      <div class="drop-zone-sub">Any document type supported</div>
+      <div class="file-types">
+        <span class="file-type-tag">.pdf</span>
+        <span class="file-type-tag">.docx</span>
+        <span class="file-type-tag">.pptx</span>
+        <span class="file-type-tag">.txt</span>
+        <span class="file-type-tag">.md</span>
+        <span class="file-type-tag">.png/.jpg</span>
+      </div>
+    </div>
+    <input type="file" id="file-input" class="hidden" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp" onchange="handleFileSelect(event)">
+    <div class="upload-status" id="upload-status"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeUploadModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────────────
+const MODEL = 'llama-3.3-70b-versatile';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let db = loadDB();
+let conversationHistory = [];
+let isThinking = false;
+let activeQuiz = null;
+let activeFlashcards = null;
+
+// ── DB ───────────────────────────────────────────────────────────────────────
+function loadDB() {
+  try { return JSON.parse(localStorage.getItem('study_db') || '{"topics":{},"history":[]}'); }
+  catch { return { topics: {}, history: [] }; }
+}
+function saveDB() { localStorage.setItem('study_db', JSON.stringify(db)); }
+
+// ── API KEY ──────────────────────────────────────────────────────────────────
+function getKey() { return localStorage.getItem('groq_key') || ''; }
+function openKeyModal() {
+  document.getElementById('key-input').value = getKey();
+  document.getElementById('key-modal').classList.remove('hidden');
+}
+function closeKeyModal() { document.getElementById('key-modal').classList.add('hidden'); }
+function saveKey() {
+  const k = document.getElementById('key-input').value.trim();
+  if (!k) return;
+  localStorage.setItem('groq_key', k);
+  updateKeyStatus();
+  closeKeyModal();
+  if (Object.keys(db.topics).length === 0) {
+    appendMessage('agent', "API key saved! Now upload some notes and I'll get to work.");
+  } else {
+    startAgent("Hello! I've just set my API key.");
+  }
+}
+function updateKeyStatus() {
+  const el = document.getElementById('api-status');
+  const has = !!getKey();
+  el.textContent = has ? 'Key set' : 'No API key';
+  el.className = 'api-status ' + (has ? 'ok' : 'missing');
+}
+
+// ── GROQ API CALL ─────────────────────────────────────────────────────────────
+async function groqChat(messages, tools = null, jsonMode = false) {
+  const key = getKey();
+  if (!key) throw new Error('No API key set. Click ⚙ API Key to add your free Groq key.');
+  const body = { model: MODEL, messages, temperature: 0.4, max_tokens: 2048 };
+  if (tools) { body.tools = tools; body.tool_choice = 'auto'; }
+  if (jsonMode) body.response_format = { type: 'json_object' };
+  const res = await fetch(GROQ_URL, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Groq error ${res.status}`);
+  }
+  return res.json();
+}
+
+// For vision (image OCR) — uses a vision-capable model
+async function groqVision(base64, mediaType) {
+  const key = getKey();
+  const res = await fetch(GROQ_URL, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: VISION_MODEL,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}` } },
+          { type: 'text', text: 'Extract all text from this image. Return only the raw text, preserving structure as much as possible.' }
+        ]
+      }],
+      max_tokens: 2048
+    })
+  });
+  if (!res.ok) throw new Error('Vision extraction failed');
+  const data = await res.json();
+  return data.choices[0].message.content;
+}
+
+// ── FILE PARSING ─────────────────────────────────────────────────────────────
+async function extractText(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  setUploadStatus(`Reading ${file.name}…`);
+
+  if (ext === 'txt' || ext === 'md') {
+    return await readAsText(file);
+  }
+
+  if (ext === 'pdf') {
+    return await extractPDF(file);
+  }
+
+  if (ext === 'docx' || ext === 'doc') {
+    return await extractDOCX(file);
+  }
+
+  if (ext === 'pptx' || ext === 'ppt') {
+    return await extractPPTX(file);
+  }
+
+  if (['png','jpg','jpeg','gif','webp'].includes(ext)) {
+    return await extractImage(file);
+  }
+
+  throw new Error(`Unsupported file type: .${ext}`);
+}
+
+function readAsText(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = rej;
+    r.readAsText(file);
+  });
+}
+
+async function extractPDF(file) {
+  const pdfjsLib = window['pdfjs-dist/build/pdf'];
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(s => s.str).join(' ') + '\n\n';
+  }
+  if (!text.trim()) throw new Error('PDF appears to be scanned (no selectable text). Try an image instead.');
+  return text;
+}
+
+async function extractDOCX(file) {
+  const buf = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer: buf });
+  return result.value;
+}
+
+async function extractPPTX(file) {
+  const buf = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(buf);
+  let text = '';
+  const slideFiles = Object.keys(zip.files)
+    .filter(n => n.match(/ppt\/slides\/slide\d+\.xml$/))
+    .sort((a, b) => {
+      const na = parseInt(a.match(/\d+/)[0]);
+      const nb = parseInt(b.match(/\d+/)[0]);
+      return na - nb;
+    });
+  for (const slideFile of slideFiles) {
+    const xml = await zip.files[slideFile].async('string');
+    const parsed = new DOMParser().parseFromString(xml, 'text/xml');
+    const nodes = parsed.querySelectorAll('t');
+    const slideText = Array.from(nodes).map(n => n.textContent).join(' ').trim();
+    if (slideText) text += slideText + '\n\n';
+  }
+  return text || 'No text content found in PowerPoint.';
+}
+
+async function extractImage(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = async e => {
+      const base64 = e.target.result.split(',')[1];
+      const mediaType = file.type;
+      setUploadStatus('Running image text extraction…');
+      try {
+        const text = await groqVision(base64, mediaType);
+        res(text);
+      } catch (err) { rej(err); }
+    };
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+// ── UPLOAD FLOW ─────────────────────────────────────────────────────────────
+function openUploadModal() { document.getElementById('upload-modal').classList.remove('hidden'); setUploadStatus(''); }
+function closeUploadModal() { document.getElementById('upload-modal').classList.add('hidden'); }
+function setUploadStatus(msg) { document.getElementById('upload-status').textContent = msg; }
+function dragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag'); }
+function dragLeave() { document.getElementById('drop-zone').classList.remove('drag'); }
+function dropFile(e) { e.preventDefault(); dragLeave(); const f = e.dataTransfer.files[0]; if (f) processFile(f); }
+function handleFileSelect(e) { const f = e.target.files[0]; if (f) processFile(f); }
+
+async function processFile(file) {
+  try {
+    const text = await extractText(file);
+    if (!text || text.trim().length < 20) throw new Error('Not enough text found in the file.');
+    setUploadStatus('Sending to AI to generate notes…');
+    closeUploadModal();
+    const msg = `I've uploaded a file called "${file.name}". Here is the extracted text:\n\n${text.slice(0, 12000)}`;
+    await startAgent(msg, true);
+  } catch (err) {
+    setUploadStatus('Error: ' + err.message);
+  }
+}
+
+// ── TOOLS ────────────────────────────────────────────────────────────────────
+const TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'process_notes',
+      description: 'Process raw text into a topic with summary, quiz questions, and flashcards. Call this when the user uploads a file or provides notes text.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'The raw notes text to process.' },
+          source_name: { type: 'string', description: 'The filename or title of the source.' }
+        },
+        required: ['text']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_progress',
+      description: 'Get all topics and quiz accuracy. Call this at the start of every conversation to understand where the student stands.',
+      parameters: { type: 'object', properties: {}, required: [] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'start_quiz',
+      description: 'Start an interactive quiz for a topic. The quiz renders inline in the chat.',
+      parameters: {
+        type: 'object',
+        properties: {
+          topic_name: { type: 'string', description: 'Exact topic name from progress data.' }
+        },
+        required: ['topic_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'start_flashcards',
+      description: 'Start an interactive flashcard review session for a topic.',
+      parameters: {
+        type: 'object',
+        properties: {
+          topic_name: { type: 'string', description: 'Exact topic name from progress data.' }
+        },
+        required: ['topic_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'show_summary',
+      description: "Show the summary for a topic to help the student review it.",
+      parameters: {
+        type: 'object',
+        properties: {
+          topic_name: { type: 'string', description: 'Exact topic name from progress data.' }
+        },
+        required: ['topic_name']
+      }
+    }
+  }
+];
+
+// ── TOOL EXECUTION ───────────────────────────────────────────────────────────
+async function executeTool(name, args) {
+  switch (name) {
+    case 'get_progress':
+      return toolGetProgress();
+    case 'process_notes':
+      return await toolProcessNotes(args.text, args.source_name);
+    case 'start_quiz':
+      return toolStartQuiz(args.topic_name);
+    case 'start_flashcards':
+      return toolStartFlashcards(args.topic_name);
+    case 'show_summary':
+      return toolShowSummary(args.topic_name);
+    default:
+      return { error: 'Unknown tool: ' + name };
+  }
+}
+
+function toolGetProgress() {
+  const topics = db.topics;
+  if (!Object.keys(topics).length) return { status: 'no_topics', message: 'No topics yet.' };
+  return {
+    topics: Object.entries(topics).map(([name, t]) => ({
+      topic: name,
+      accuracy: t.attempts > 0 ? Math.round(100 * t.correct / t.attempts) + '%' : 'not quizzed',
+      attempts: t.attempts,
+      last_studied: t.last_studied || 'never'
+    })),
+    total_sessions: db.history.length
+  };
+}
+
+async function toolProcessNotes(text, sourceName) {
+  const system = `You are a study assistant. Given lecture notes, extract:
+1. A topic name (2-5 words)
+2. A clear summary (150-250 words)
+3. Exactly 5 multiple choice quiz questions (4 options each)
+4. Exactly 8 flashcards (front/back pairs)
+
+The "answer" field in quiz questions MUST be a single lowercase letter: a, b, c, or d.
+
+Respond ONLY with valid JSON in this exact format:
+{"topic":"...","summary":"...","quiz":[{"question":"...","options":["...","...","...","..."],"answer":"a"}],"flashcards":[{"front":"...","back":"..."}]}`;
+
+  const res = await groqChat(
+    [{ role: 'system', content: system }, { role: 'user', content: text.slice(0, 10000) }],
+    null, true
+  );
+  const result = JSON.parse(res.choices[0].message.content);
+  const name = result.topic;
+  const existing = db.topics[name] || {};
+  db.topics[name] = {
+    summary: result.summary,
+    quiz: result.quiz,
+    flashcards: result.flashcards,
+    attempts: existing.attempts || 0,
+    correct: existing.correct || 0,
+    last_studied: existing.last_studied || new Date().toISOString(),
+    added: new Date().toISOString(),
+    source: sourceName || 'uploaded'
+  };
+  saveDB();
+  renderSidebar();
+  return {
+    status: 'success',
+    topic: name,
+    summary_preview: result.summary.slice(0, 150) + '…',
+    quiz_questions: result.quiz.length,
+    flashcards: result.flashcards.length
+  };
+}
+
+function toolStartQuiz(topicName) {
+  const topic = db.topics[topicName];
+  if (!topic) return { error: `Topic "${topicName}" not found.` };
+  const questions = [...topic.quiz].sort(() => Math.random() - 0.5);
+  activeQuiz = { topicName, questions, index: 0, correct: 0, answered: false };
+  renderQuizQuestion();
+  return { status: 'quiz_started', topic: topicName, questions: questions.length };
+}
+
+function toolStartFlashcards(topicName) {
+  const topic = db.topics[topicName];
+  if (!topic) return { error: `Topic "${topicName}" not found.` };
+  const cards = [...topic.flashcards].sort(() => Math.random() - 0.5);
+  activeFlashcards = { topicName, cards, index: 0, flipped: false };
+  renderFlashcard();
+  return { status: 'flashcards_started', topic: topicName, cards: cards.length };
+}
+
+function toolShowSummary(topicName) {
+  const topic = db.topics[topicName];
+  if (!topic) return { error: `Topic "${topicName}" not found.` };
+  appendMessage('agent', `📖 **Summary: ${topicName}**\n\n${topic.summary}`);
+  return { status: 'shown' };
+}
+
+// ── QUIZ RENDERING ────────────────────────────────────────────────────────────
+function renderQuizQuestion() {
+  if (!activeQuiz) return;
+  const { questions, index, topicName } = activeQuiz;
+  if (index >= questions.length) { finishQuiz(); return; }
+  const q = questions[index];
+  const letters = ['a','b','c','d'];
+
+  // Resolve correct index
+  let correctIndex = 0;
+  const raw = q.answer.trim().toLowerCase();
+  if (raw.length === 1 && 'abcd'.includes(raw)) {
+    correctIndex = 'abcd'.indexOf(raw);
+  } else {
+    const found = q.options.findIndex(o => o.trim().toLowerCase() === raw);
+    if (found >= 0) correctIndex = found;
+  }
+
+  const card = document.createElement('div');
+  card.className = 'msg agent';
+  card.innerHTML = `
+    <span class="msg-label">Quiz — ${topicName}</span>
+    <div class="quiz-card" id="quiz-card-${index}">
+      <div class="quiz-progress">Question ${index+1} of ${questions.length}</div>
+      <div class="quiz-q">${q.question}</div>
+      <div class="quiz-options" id="quiz-opts-${index}">
+        ${q.options.map((opt, i) => `
+          <button class="quiz-opt" data-index="${i}" onclick="answerQuiz(${i}, ${correctIndex}, ${index})">
+            <span class="quiz-letter">${letters[i]}</span>${opt}
+          </button>`).join('')}
+      </div>
+    </div>`;
+  document.getElementById('messages').appendChild(card);
+  scrollBottom();
+  activeQuiz.cardEl = card;
+}
+
+function answerQuiz(chosen, correct, qIndex) {
+  if (activeQuiz.answered) return;
+  activeQuiz.answered = true;
+  const opts = document.querySelectorAll(`#quiz-opts-${qIndex} .quiz-opt`);
+  opts.forEach(btn => {
+    btn.disabled = true;
+    const i = parseInt(btn.dataset.index);
+    if (i === correct) btn.classList.add('correct');
+    else if (i === chosen) btn.classList.add('wrong');
+  });
+  if (chosen === correct) activeQuiz.correct++;
+  setTimeout(() => {
+    activeQuiz.index++;
+    activeQuiz.answered = false;
+    renderQuizQuestion();
+  }, 900);
+}
+
+function finishQuiz() {
+  const { topicName, correct, questions } = activeQuiz;
+  const total = questions.length;
+  const pct = Math.round(100 * correct / total);
+
+  // Save score
+  const topic = db.topics[topicName];
+  if (topic) {
+    topic.attempts += total;
+    topic.correct += correct;
+    topic.last_studied = new Date().toISOString();
+    db.history.push({ date: new Date().toISOString(), topic: topicName, score: `${correct}/${total}` });
+    saveDB();
+    renderSidebar();
+  }
+
+  // Render score card
+  const card = document.createElement('div');
+  card.className = 'msg agent';
+  card.innerHTML = `
+    <span class="msg-label">Quiz Complete</span>
+    <div class="score-card">
+      <div class="score-number">${correct}/${total}</div>
+      <div class="score-label">${pct}% — ${pct >= 80 ? '🎉 Great work!' : pct >= 50 ? '📚 Keep going!' : '💪 Let\'s review and try again.'}</div>
+    </div>`;
+  document.getElementById('messages').appendChild(card);
+  scrollBottom();
+  activeQuiz = null;
+
+  // Let agent respond to the score
+  const scoreMsg = `Quiz finished. Score: ${correct}/${total} (${pct}%) on ${topicName}.`;
+  conversationHistory.push({ role: 'user', content: scoreMsg });
+  runAgentLoop();
+}
+
+// ── FLASHCARD RENDERING ───────────────────────────────────────────────────────
+function renderFlashcard() {
+  if (!activeFlashcards) return;
+  const { cards, index, topicName } = activeFlashcards;
+  if (index >= cards.length) {
+    appendMessage('agent', `You've reviewed all ${cards.length} flashcards for ${topicName}! 🎉`);
+    activeFlashcards = null;
+    return;
+  }
+  const card = cards[index];
+  const el = document.createElement('div');
+  el.className = 'msg agent';
+  el.id = 'flashcard-el';
+  el.innerHTML = `
+    <span class="msg-label">Flashcards — ${topicName} (${index+1}/${cards.length})</span>
+    <div class="flashcard" onclick="flipCard()" id="flashcard-inner">
+      <div class="flashcard-label" id="fc-label">Question</div>
+      <div class="flashcard-content" id="fc-content">${card.front}</div>
+      <div class="flashcard-hint" id="fc-hint">Click to reveal answer</div>
+    </div>
+    <div class="flashcard-nav mt8">
+      <button class="btn btn-ghost btn-sm" onclick="nextCard()">Next card →</button>
+    </div>`;
+  document.getElementById('messages').appendChild(el);
+  scrollBottom();
+}
+
+function flipCard() {
+  if (!activeFlashcards) return;
+  const card = activeFlashcards.cards[activeFlashcards.index];
+  activeFlashcards.flipped = !activeFlashcards.flipped;
+  document.getElementById('fc-label').textContent = activeFlashcards.flipped ? 'Answer' : 'Question';
+  document.getElementById('fc-content').textContent = activeFlashcards.flipped ? card.back : card.front;
+  document.getElementById('fc-hint').textContent = activeFlashcards.flipped ? 'Click to see question again' : 'Click to reveal answer';
+}
+
+function nextCard() {
+  activeFlashcards.index++;
+  activeFlashcards.flipped = false;
+  renderFlashcard();
+}
+
+// ── AGENT LOOP ────────────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are a proactive, encouraging AI study agent. You have tools to check progress, run quizzes, show flashcards, display summaries, and process notes.
+
+At the start of a conversation, call get_progress immediately to see what topics the student has and how they're doing. Based on what you see, proactively suggest the most helpful next action.
+
+When a file upload message arrives, call process_notes right away with the provided text.
+
+After a quiz score comes in, reflect on it briefly and suggest what to do next.
+
+Be concise, warm, and direct. You are a coach. Think: "What does this student need right now?"`;
+
+async function startAgent(userMsg, isUpload = false) {
+  if (!getKey()) { openKeyModal(); return; }
+  appendUserMessage(userMsg);
+  if (isUpload) {
+    conversationHistory.push({ role: 'user', content: userMsg });
+  } else {
+    conversationHistory.push({ role: 'user', content: userMsg });
+  }
+  await runAgentLoop();
+}
+
+async function runAgentLoop() {
+  isThinking = true;
+  document.getElementById('send-btn').disabled = true;
+  const thinkEl = showThinking();
+
+  const messages = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    ...conversationHistory
+  ];
+
+  try {
+    let iterations = 0;
+    while (iterations < 8) {
+      iterations++;
+      const data = await groqChat(messages, TOOLS);
+      const msg = data.choices[0].message;
+
+      // Handle tool calls
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        const assistantMsg = { role: 'assistant', content: msg.content || '', tool_calls: msg.tool_calls };
+        messages.push(assistantMsg);
+
+        for (const tc of msg.tool_calls) {
+          const toolName = tc.function.name;
+          const toolArgs = JSON.parse(tc.function.arguments || '{}');
+
+          // Show tool call indicator
+          removeThinking(thinkEl);
+          const toolEl = showToolCall(toolName);
+
+          let result;
+          try {
+            result = await executeTool(toolName, toolArgs);
+          } catch (e) {
+            result = { error: e.message };
+          }
+
+          markToolDone(toolEl);
+
+          const toolResultMsg = {
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(result)
+          };
+          messages.push(toolResultMsg);
+          conversationHistory.push(assistantMsg);
+          conversationHistory.push(toolResultMsg);
+        }
+
+        // Continue loop — let AI react to tool results
+        showThinking();
+        continue;
+      }
+
+      // No tool calls — AI is talking
+      removeThinking(thinkEl);
+      const text = msg.content || '';
+      if (text.trim()) {
+        appendMessage('agent', text);
+        conversationHistory.push({ role: 'assistant', content: text });
+      }
+      break;
+    }
+  } catch (err) {
+    removeThinking(thinkEl);
+    appendMessage('agent', `Error: ${err.message}`);
+  }
+
+  isThinking = false;
+  document.getElementById('send-btn').disabled = false;
+}
+
+// ── CHAT UI HELPERS ──────────────────────────────────────────────────────────
+function appendUserMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'msg user';
+  el.innerHTML = `<span class="msg-label">You</span><div class="msg-bubble">${escHtml(text)}</div>`;
+  document.getElementById('messages').appendChild(el);
+  scrollBottom();
+}
+
+function appendMessage(role, text) {
+  const el = document.createElement('div');
+  el.className = `msg ${role}`;
+  const label = role === 'agent' ? 'Study Agent' : 'You';
+  el.innerHTML = `<span class="msg-label">${label}</span><div class="msg-bubble">${escHtml(text)}</div>`;
+  document.getElementById('messages').appendChild(el);
+  scrollBottom();
+}
+
+function showThinking() {
+  const el = document.createElement('div');
+  el.className = 'msg agent thinking-msg';
+  el.innerHTML = `<div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span style="color:var(--muted);font-size:12px">Agent is thinking…</span></div>`;
+  document.getElementById('messages').appendChild(el);
+  scrollBottom();
+  return el;
+}
+
+function removeThinking() {
+  document.querySelectorAll('.thinking-msg').forEach(e => e.remove());
+}
+
+function showToolCall(name) {
+  const el = document.createElement('div');
+  el.className = 'msg agent';
+  el.innerHTML = `<span class="tool-call" id="tc-${name}">${name.replace(/_/g,' ')}</span>`;
+  document.getElementById('messages').appendChild(el);
+  scrollBottom();
+  return el;
+}
+
+function markToolDone(el) {
+  el.querySelector('.tool-call')?.classList.add('done');
+}
+
+function scrollBottom() {
+  const m = document.getElementById('messages');
+  m.scrollTop = m.scrollHeight;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+// ── INPUT ────────────────────────────────────────────────────────────────────
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || isThinking) return;
+  input.value = '';
+  input.style.height = '';
+  if (!getKey()) { openKeyModal(); return; }
+  await startAgent(text);
+}
+
+// ── SIDEBAR ──────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const list = document.getElementById('topics-list');
+  const topics = db.topics;
+  if (!Object.keys(topics).length) {
+    list.innerHTML = '<div class="empty-topics">Upload some notes to get started. Supports PDF, Word, PowerPoint, and text files.</div>';
+    return;
+  }
+  list.innerHTML = Object.entries(topics).map(([name, t]) => {
+    const pct = t.attempts > 0 ? Math.round(100 * t.correct / t.attempts) : 0;
+    const label = t.attempts > 0 ? pct + '%' : '—';
+    const fillW = t.attempts > 0 ? pct : 0;
+    const color = pct >= 80 ? 'var(--accent)' : pct >= 50 ? 'var(--warn)' : t.attempts > 0 ? 'var(--danger)' : 'var(--border2)';
+    return `
+      <div class="topic-card" onclick="topicClick('${escHtml(name)}')">
+        <div class="topic-name">${escHtml(name)}</div>
+        <div class="topic-bar-wrap">
+          <div class="topic-bar"><div class="topic-bar-fill" style="width:${fillW}%;background:${color}"></div></div>
+          <span class="topic-pct">${label}</span>
+        </div>
+        <div class="topic-meta">${t.attempts ? `${t.attempts} questions attempted` : 'Not quizzed yet'}</div>
+      </div>`;
+  }).join('');
+}
+
+function topicClick(name) {
+  if (!getKey()) { openKeyModal(); return; }
+  startAgent(`Show me options for "${name}"`);
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+updateKeyStatus();
+renderSidebar();
+
+// If they already have a key and topics, greet them with a progress check
+if (getKey() && Object.keys(db.topics).length > 0) {
+  conversationHistory = [];
+  setTimeout(() => startAgent("Hi! I'm back to study."), 600);
+}
+
+// Close modals on overlay click
+document.getElementById('key-modal').addEventListener('click', function(e) { if (e.target === this) closeKeyModal(); });
+document.getElementById('upload-modal').addEventListener('click', function(e) { if (e.target === this) closeUploadModal(); });
+</script>
+</body>
+</html>
